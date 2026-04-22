@@ -1,0 +1,53 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:24.11-py3
+
+%files
+    requirements.txt /tmp-workspace/requirements.txt
+
+%labels
+    Author tvosch
+    Version 0.1.0
+    Base nvcr.io/nvidia/pytorch:24.11-py3
+
+%post
+    # Triton uses ldconfig -p to find libcuda.so.1. Use a custom path to avoid
+    # conflicting with /usr/local/cuda/compat/lib which CUDA/Apptainer --nv may
+    # manage as a symlink (rm + ln -s) at runtime, failing if it's a directory.
+    mkdir -p /usr/local/lib/cuda-compat/
+    ln -sf /.singularity.d/libs/libcuda.so.1 /usr/local/lib/cuda-compat/libcuda.so.1
+    ln -sf /.singularity.d/libs/libcuda.so.1 /usr/local/lib/cuda-compat/libcuda.so
+    echo "/usr/local/lib/cuda-compat" > /etc/ld.so.conf.d/cuda-compat.conf
+    ldconfig
+
+    # Freeze torch family so uv can never replace it
+    python -m pip freeze | grep -E "^(torch|nvidia|triton|cuda|xformers)" \
+        | grep -v "@ file://" \
+        | sed 's/+.*//' > /tmp/torch-overrides.txt
+
+    # Apply overrides to every uv call and install to system python (no venv)
+    export UV_BREAK_SYSTEM_PACKAGES=1
+    export UV_OVERRIDE=/tmp/torch-overrides.txt
+    export UV_SYSTEM_PYTHON=1
+
+    pip install uv
+
+    uv pip install numpy==1.26.4
+    uv pip install transformers==4.51.3
+    uv pip install datasets==4.4.1
+    uv pip install nltk==3.9.2
+    uv pip install wandb==0.22.3
+
+    #uv pip install -r /tmp-workspace/requirements.txt
+    #rm /tmp-workspace
+
+    #export TORCH_CUDA_ARCH_LIST="9.0a" #GH200
+
+
+%environment
+    export CUDA_HOME=/usr/local/cuda
+    export NVSHMEM_DIR=/opt/nvshmem
+    # Preserve LD_LIBRARY_PATH set by Apptainer --nv (which injects libcuda into /.singularity.d/libs/)
+    # and add /usr/local/lib/cuda-compat where Triton's ldconfig fallback finds libcuda.so.1
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/lib/cuda-compat${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+    export PYTHONNOUSERSITE=1
+    export LD_PRELOAD=

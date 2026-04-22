@@ -227,7 +227,6 @@ def validate_args(args, defaults={}):
     )
 
     args.data_parallel_size = args.world_size // total_model_size
-
     if args.rank == 0:
         print('using world size: {}, data-parallel size: {}, '
               'context-parallel size: {}, '
@@ -243,6 +242,7 @@ def validate_args(args, defaults={}):
                   args.encoder_tensor_model_parallel_size,
                   args.pipeline_model_parallel_size,
                   args.encoder_pipeline_model_parallel_size), flush=True)
+        print(args)
 
     # Checks.
 

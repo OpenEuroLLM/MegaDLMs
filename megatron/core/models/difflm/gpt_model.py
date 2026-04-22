@@ -291,7 +291,13 @@ class GPTModel(LanguageModule):
         np.random.seed(_seed)
         random_number = np.random.uniform(0, 1)
         random_length = np.random.randint(low=2, high=input_ids.shape[1] + 1)
-        
+
+        # After the noshift trim (input_ids[:, 1:]), effective seq len = random_length - 1.
+        # It must be divisible by TP size for sequence-parallel reduce_scatter.
+        tp_size = self.args.tensor_model_parallel_size
+        effective_len = max(tp_size, (random_length - 1) // tp_size * tp_size)
+        random_length = effective_len + 1
+
         # restore the rng state
         np.random.set_state(rng_state)
         return random_number < varilen_prob, random_length
