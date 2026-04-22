@@ -17,7 +17,7 @@ date
 
 CONTAINER=/e/project1/e-sta-openeurollm/vanosch1/containers/MegaDLM-24-11.sif
 CKPT_DIR=/e/scratch/e-sta-openeurollm/$USER/cache
-export PROJECT_DIR=$PWDe
+export PROJECT_DIR=$PWD
 
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
@@ -111,8 +111,7 @@ MODEL_PARALLEL_ARGS=(
 ########################################################
 
 RUN_NAME=dlm_training
-#train_data_prefix="$DATASETS_DIR/path/to/train/data/prefix"
-#valid_data_prefix="$DATASETS_DIR/path/to/valid/data/prefix"
+WANDB_PROJECT_NAME=dlm_scaling_jupiter
 train_data_prefix="/e/project1/e-sta-openeurollm/harmsen1/datasets/FineWeb/fineweb-10BT_text_document"
 valid_data_prefix="/e/project1/e-sta-openeurollm/harmsen1/datasets/FineWeb/fineweb-10BT_text_document"
 TRAINING_TOKENS_PER_EPOCH=10000000000
@@ -298,7 +297,7 @@ EVAL_AND_LOGGING_ARGS=(
     # --load $CHECKPOINT_PATH
     --eval-iters $VAL_ITERS
     --tensorboard-dir ${LOGS_PATH}/${RUN_NAME}/tensorboard
-    --wandb-project dlm
+    --wandb-project $WANDB_PROJECT_NAME
     --wandb-exp-name $RUN_NAME
     --wandb-run-id $RUN_NAME
     --wandb-save-dir ${LOGS_PATH}/${RUN_NAME}/wandb
