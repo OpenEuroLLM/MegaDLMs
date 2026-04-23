@@ -28,14 +28,22 @@ PEAK_GPU_TFLOPS = 989.0
 
 # Map number of GPUs to the corresponding SLURM log file path.
 EXPERIMENTS = {
-    4: "output/dllm_n4_tp4_pp1_gbs256_mbs1_fsdp0/slurm-388889.log",
+    4: "output/dllm_n1_tp4_pp1_gbs16_mbs1_fsdp0/slurm-389149.log",
+    8: "output/dllm_n2_tp4_pp1_gbs32_mbs1_fsdp0/slurm-389150.log",
+    16: "output/dllm_n4_tp4_pp1_gbs64_mbs1_fsdp0/slurm-389151.log",
+    32: "output/dllm_n8_tp4_pp1_gbs128_mbs1_fsdp0/slurm-389152.log",
+    64: "output/dllm_n16_tp4_pp1_gbs256_mbs1_fsdp0/slurm-389183.log",
+    128: "output/dllm_n32_tp4_pp1_gbs512_mbs1_fsdp0/slurm-389153.log",
+    256: "output/dllm_n64_tp4_pp1_gbs1024_mbs1_fsdp0/slurm-389154.log",
+    512: "output/dllm_n128_tp4_pp1_gbs2048_mbs1_fsdp0/slurm-389155.log",
+    1024: "output/dllm_n256_tp4_pp1_gbs4096_mbs1_fsdp0/slurm-389174.log"
 }
 
 # Output filename for the combined figure (None = show interactively).
 OUTPUT_FILE = "dllm_jupiter_scaling.png"
 
 # Title for the top (token throughput) bar chart.
-PLOT_TITLE = "Token Throughput DiffLM 8B Jupiter (TP 4, PP 1, GAS 128, MBS 4)"
+PLOT_TITLE = "Token Throughput DiffLM 8B Jupiter (TP 4, PP 1, GAS 16, MBS 1)"
 
 _WORLD_SIZE_RE = re.compile(r"using world size:\s*(\d+)")
 
