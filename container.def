@@ -20,13 +20,14 @@ From: nvcr.io/nvidia/pytorch:24.11-py3
     ldconfig
 
     # Freeze torch family so uv can never replace it
+    mkdir -p /tmp-workspace/
     python -m pip freeze | grep -E "^(torch|nvidia|triton|cuda|xformers)" \
         | grep -v "@ file://" \
-        | sed 's/+.*//' > /tmp/torch-overrides.txt
+        | sed 's/+.*//' > /tmp-workspace/torch-overrides.txt
 
     # Apply overrides to every uv call and install to system python (no venv)
     export UV_BREAK_SYSTEM_PACKAGES=1
-    export UV_OVERRIDE=/tmp/torch-overrides.txt
+    export UV_OVERRIDE=/tmp-workspace/torch-overrides.txt
     export UV_SYSTEM_PYTHON=1
 
     pip install uv
@@ -38,7 +39,7 @@ From: nvcr.io/nvidia/pytorch:24.11-py3
     uv pip install wandb==0.22.3
 
     #uv pip install -r /tmp-workspace/requirements.txt
-    #rm /tmp-workspace
+    rm /tmp-workspace -rf
 
     #export TORCH_CUDA_ARCH_LIST="9.0a" #GH200
 

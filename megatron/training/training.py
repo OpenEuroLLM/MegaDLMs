@@ -431,6 +431,12 @@ def _pretrain(
 
     wandb_writer = get_wandb_writer()
     if wandb_writer:
+        import wandb as _wandb
+        if _wandb.run is not None:
+            print("\nFull wandb run summary:")
+            for k, v in sorted(_wandb.run.summary._as_dict().items()):
+                if not k.startswith('_'):
+                    print(f"  {k}: {v}")
         wandb_writer.finish()
     maybe_finalize_async_save(blocking=True)
 

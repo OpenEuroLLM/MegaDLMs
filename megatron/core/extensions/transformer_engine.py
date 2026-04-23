@@ -1232,7 +1232,11 @@ except ImportError:
 
 try:
 
-    from transformer_engine.pytorch.attention import FusedRoPEFunc
+    try:
+        from transformer_engine.pytorch.attention import FusedRoPEFunc
+    except ImportError:
+        # TE >= 2.x moved FusedRoPEFunc out of pytorch.attention
+        from transformer_engine.pytorch.rope import FusedRoPEFunc
 
     def fused_apply_rotary_pos_emb(
         t: torch.Tensor, freqs: torch.Tensor, transpose_output_memory: bool = False

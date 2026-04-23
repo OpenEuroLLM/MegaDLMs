@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account=e-sta-openeurollm
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --partition=booster
-#SBATCH --time=02:00:00
+#SBATCH --time=01:00:00
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=72
+#SBATCH --cpus-per-task=288
 #SBATCH --exclusive
 #SBATCH --gpus-per-node=4
-#SBATCH --output=./output/megadlm_7b/slurm-%j.log
+#SBATCH --output=./output/tmp/slurm-%j.log
 #SBATCH --job-name=difflm_pretrain
 
 
@@ -67,10 +67,18 @@ export NUM_QUERY_GROUPS=8
 export FFN_HIDDEN_SIZE=14336
 export KV_CHANNELS=128             # hidden_size / num_attention_heads
 export ROTARY_BASE=500000
-export SEQ_LENGTH=4097 # difflm-noshift trims first token (input_ids[:, 1:]), so effective seq = 4096, divisible by TP=4
+export SEQ_LENGTH=4097 #4097 # difflm-noshift trims first token (input_ids[:, 1:]), so effective seq = 4096, divisible by TP=4
 export VOCAB_SIZE=50289
-export MODEL_PARALLEL_SIZE=4      # TP=4: shards model across 4 GPUs per node
+export MODEL_PARALLEL_SIZE=4     # TP=4: shards model across 4 GPUs per node
 export PIPELINE_MODEL_PARALLEL_SIZE=1
+USE_FSDP=0
+# FSDP enable these in TRAINING_ARGS:
+# --use-torch-fsdp2
+#    --no-gradient-accumulation-fusion
+# Disable these for FSDP (enable them back)
+# --use-distributed-optimizer
+# --num-distributed-optimizer-instances $NUM_NODES
+# --overlap-param-gather
 
 ########################################################
 # Distributed settings
@@ -110,13 +118,14 @@ MODEL_PARALLEL_ARGS=(
 # Training-related settings
 ########################################################
 
-RUN_NAME=dlm_training
+
 WANDB_PROJECT_NAME=dlm_scaling_jupiter
 train_data_prefix="/e/project1/e-sta-openeurollm/harmsen1/datasets/FineWeb/fineweb-10BT_text_document"
 valid_data_prefix="/e/project1/e-sta-openeurollm/harmsen1/datasets/FineWeb/fineweb-10BT_text_document"
 TRAINING_TOKENS_PER_EPOCH=10000000000
 EPOCHS=1
-GLOBAL_BATCH_SIZE=256
+GLOBAL_BATCH_SIZE=$((16 * SLURM_NNODES))
+MICRO_BATCH_SIZE=1
 TOKENIZER=/e/scratch/e-sta-openeurollm/harmsen1/hf_home/hub/models--openai-community--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e
 
 current_script_dir=$(dirname "$(readlink -f "$0")")
@@ -145,12 +154,6 @@ valid_data_prefix_count="1.0 $valid_data_prefix"
 #     python tools/count_tokens.py \
 #         --weighted-prefix "$valid_data_prefix_count"
 # fi
-
-LOGS_PATH=${LOG_DIR:-"$CKPT_DIR/cache/difflm/logs"}
-data_local_cache_dir=${CKPT_DIR}/cache/difflm/data/data_cache/${RUN_NAME}
-mkdir -p $data_local_cache_dir
-mkdir -p "${LOGS_PATH}/${RUN_NAME}"
-mkdir -p "$CKPT_DIR/cache/difflm/training_checkpoints/${RUN_NAME}"
 
 GPT_MODEL_ARGS=(
     --seq-length $SEQ_LENGTH
@@ -191,7 +194,7 @@ PLMT_ARGS=(
 TARGET_TRAINING_TOKENS=$TRAINING_TOKENS
 TOKENS_PER_BATCH=$((GLOBAL_BATCH_SIZE * SEQ_LENGTH))
 #TRAIN_ITERS=$((TARGET_TRAINING_TOKENS / TOKENS_PER_BATCH))
-TRAIN_ITERS=5
+TRAIN_ITERS=10
 SAVE_INTERVAL=$((TRAIN_ITERS / EPOCHS))
 LOG_INTERVAL=1
 NON_PERSISTENT_SAVE_INTERVAL=$((TRAIN_ITERS * 2))
@@ -222,8 +225,21 @@ if [ $((DATA_PARALLEL_SIZE * MICRO_BATCH_SIZE)) -gt $GLOBAL_BATCH_SIZE ]; then
     fi
 fi
 
+OUTPUT_NAME="dllm_n${NUM_NODES}_tp${MODEL_PARALLEL_SIZE}_pp${PIPELINE_MODEL_PARALLEL_SIZE}_gbs${GLOBAL_BATCH_SIZE}_mbs${MICRO_BATCH_SIZE}_fsdp${USE_FSDP}"
+RUN_NAME="$OUTPUT_NAME_${SLURM_JOBID}"
+DESCRIPTIVE_OUTPUT_DIR="./output/${OUTPUT_NAME}"
+mkdir -p "$DESCRIPTIVE_OUTPUT_DIR"
+ln -sfn "$(pwd)/output/tmp/slurm-${SLURM_JOB_ID}.log" "${DESCRIPTIVE_OUTPUT_DIR}/slurm-${SLURM_JOB_ID}.log"
+echo "Output directory: ${DESCRIPTIVE_OUTPUT_DIR}"
+
+LOGS_PATH=${LOG_DIR:-"$CKPT_DIR/cache/difflm/logs"}
+data_local_cache_dir=${CKPT_DIR}/cache/difflm/data/data_cache/${RUN_NAME}
+mkdir -p $data_local_cache_dir
+mkdir -p "${LOGS_PATH}/${RUN_NAME}"
+mkdir -p "$CKPT_DIR/cache/difflm/training_checkpoints/${RUN_NAME}"
+
 TRAINING_ARGS=(
-    --micro-batch-size 1
+    --micro-batch-size $MICRO_BATCH_SIZE
     --global-batch-size $GLOBAL_BATCH_SIZE
     --train-iters $TRAIN_ITERS
     --weight-decay 0.1
@@ -240,12 +256,14 @@ TRAINING_ARGS=(
     --lr-wsd-decay-style exponential
     --lr-wsd-decay-iters 0
     --use-flash-attn
-    # --use-checkpoint-args
+    # --use-torch-fsdp2
+    # --no-gradient-accumulation-fusion
     --use-distributed-optimizer
     --num-distributed-optimizer-instances $NUM_NODES
     --overlap-param-gather
     --overlap-grad-reduce
     --distributed-timeout-minutes 60
+    # --tp-comm-overlap # /tmp/pip-req-build-a57t1dje/transformer_engine/pytorch/csrc/userbuffers/userbuffers-host.cpp:228 in function create_communicator_grouped2: CUDA Error: operation not supported
     # --recompute-granularity full
     # --recompute-method uniform
     # --recompute-num-layers 1
@@ -268,6 +286,7 @@ DATA_ARGS=(
     --data-cache-path $data_local_cache_dir
     --tokenizer-type HuggingFaceTokenizer
     --tokenizer-model $TOKENIZER
+    --num-workers 8
 )
 
 if [ "$WANDB_MODE" == "" ]; then
