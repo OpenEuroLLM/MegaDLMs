@@ -78,6 +78,11 @@ _ITER_LINE_RE = re.compile(
 )
 _ITER_SEQ_LEN_RE = re.compile(r"real input length:\s+([\d.E+]+)")
 
+_WANDB_MBS_RE = re.compile(r"wandb:\s+micro-batch-size\s+(\d+)")
+_WANDB_TP_RE  = re.compile(r"wandb:\s+tensor-model-parallel-size\s+(\d+)")
+_WANDB_PP_RE  = re.compile(r"wandb:\s+pipeline-model-parallel-size\s+(\d+)")
+_PATH_META_RE = re.compile(r"_tp(\d+)_pp(\d+)_gbs\d+_mbs(\d+)")
+
 
 def _parse_full_summary(text: str) -> dict:
     """Parse 'Full wandb run summary:' block into a float-valued dict."""
@@ -144,6 +149,34 @@ def parse_log(path: str) -> dict:
         else:
             raise ValueError(f"Could not find batch-size in {path}")
 
+    # --- MBS / TP / PP / GAS ---
+    pm = _PATH_META_RE.search(path)
+    m = _WANDB_MBS_RE.search(text)
+    if m:
+        mbs = int(m.group(1))
+    elif "micro-batch-size" in full:
+        mbs = int(full["micro-batch-size"])
+    else:
+        mbs = int(pm.group(3)) if pm else None
+
+    m = _WANDB_TP_RE.search(text)
+    if m:
+        tp = int(m.group(1))
+    elif "tensor-model-parallel-size" in full:
+        tp = int(full["tensor-model-parallel-size"])
+    else:
+        tp = int(pm.group(1)) if pm else None
+
+    m = _WANDB_PP_RE.search(text)
+    if m:
+        pp = int(m.group(1))
+    elif "pipeline-model-parallel-size" in full:
+        pp = int(full["pipeline-model-parallel-size"])
+    else:
+        pp = int(pm.group(2)) if pm else None
+
+    gas = (global_bs * tp * pp // (mbs * world_size)) if (mbs and world_size and tp and pp) else None
+
     # --- Sequence length (needed when tok/s/GPU is absent) ---
     seq_len = None
     if "real input length" in full:
@@ -168,6 +201,8 @@ def parse_log(path: str) -> dict:
     return {
         "world_size":        world_size,
         "global_bs":         global_bs,
+        "mbs":               mbs,
+        "gas":               gas,
         "seq_len":           seq_len,
         "tokens_per_step":   tokens_per_step,
         "s_per_step":        s_per_step,
@@ -191,18 +226,6 @@ def main():
     baseline_tok_s = records[baseline_gpus]["tok_per_s"]
 
     show_mfu = PEAK_GPU_TFLOPS is not None
-    mfu_header = f"{'MFU':>7}" if show_mfu else ""
-    header = (
-        f"{'Nodes':>6}  {'GPUs':>5}  {'GBS':>5}  {'SeqLen':>7}  "
-        f"{'Tok/step':>10}  {'s/step':>7}  {'Tok/s/GPU':>10}  "
-        f"{'TFLOPs/GPU':>11}  {'Tokens/s':>12}  {'Efficiency':>11}"
-        + (f"  {mfu_header}" if show_mfu else "")
-    )
-    sep = "-" * len(header)
-    print()
-    print(sep)
-    print(header)
-    print(sep)
 
     table_rows = []
     for n_gpus in gpu_counts:
@@ -221,16 +244,41 @@ def main():
             **r,
         })
 
-        tok_step_str = f"{r['tokens_per_step']:>10.0f}" if r["tokens_per_step"] else f"{'N/A':>10}"
-        seq_str = f"{r['seq_len']:>7}" if r["seq_len"] else f"{'N/A':>7}"
-        mfu_str = f"  {mfu:>6.1f}%" if show_mfu else ""
-        print(
-            f"{nodes:>6}  {n_gpus:>5}  {r['global_bs']:>5}  {seq_str}  "
-            f"{tok_step_str}  {r['s_per_step']:>7.3f}  {r['tok_per_s_per_gpu']:>10.0f}  "
-            f"{r['tflops_per_gpu']:>11.1f}  {r['tok_per_s']:>12.0f}  "
-            f"{efficiency:>10.1f}%{mfu_str}"
-        )
-    print(sep)
+    cols   = ["Nodes", "GPUs", "MBS", "GBS", "GAS", "SeqLen",
+              "Tok/step", "s/step", "Tok/s/GPU", "TFLOPs/GPU", "Tokens/s", "Efficiency"]
+    widths = [5, 4, 3, 5, 3, 6, 8, 6, 9, 10, 8, 10]
+    if show_mfu:
+        cols.append("MFU")
+        widths.append(5)
+
+    def _row(vals):
+        return "| " + " | ".join(f"{v:>{w}}" for v, w in zip(vals, widths)) + " |"
+
+    print()
+    print(_row(cols))
+    print("|" + "|".join(f"{'-'*(w+1)}:" for w in widths) + "|")
+    for tr in table_rows:
+        mbs_s  = str(tr["mbs"]) if tr.get("mbs") is not None else "N/A"
+        gas_s  = str(tr["gas"]) if tr.get("gas") is not None else "N/A"
+        seq_s  = str(tr["seq_len"]) if tr["seq_len"] else "N/A"
+        toks_s = f"{tr['tokens_per_step']:.0f}" if tr["tokens_per_step"] else "N/A"
+        vals = [
+            str(tr["nodes"]),
+            str(tr["n_gpus"]),
+            mbs_s,
+            str(tr["global_bs"]),
+            gas_s,
+            seq_s,
+            toks_s,
+            f"{tr['s_per_step']:.3f}",
+            f"{tr['tok_per_s_per_gpu']:.0f}",
+            f"{tr['tflops_per_gpu']:.1f}",
+            f"{tr['tok_per_s']:.0f}",
+            f"{tr['efficiency']:.1f}%",
+        ]
+        if show_mfu:
+            vals.append(f"{tr['mfu']:.1f}%")
+        print(_row(vals))
 
     n_gpus_arr      = np.array([tr["n_gpus"]          for tr in table_rows])
     tflops_arr      = np.array([tr["tflops_per_gpu"]  for tr in table_rows])

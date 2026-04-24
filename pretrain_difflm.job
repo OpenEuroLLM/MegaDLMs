@@ -186,7 +186,7 @@ GPT_MODEL_ARGS=(
     --disable-bias-linear
     --position-embedding-type rope
     --qk-layernorm
-    #--untie-embeddings-and-output-weights
+    --untie-embeddings-and-output-weights
 )
 
 PLMT_ARGS=(
