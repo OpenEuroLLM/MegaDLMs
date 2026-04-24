@@ -1165,7 +1165,11 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
         elapsed_time_per_iteration = elapsed_time / total_iterations
 
         throughput = num_floating_point_operations(args, batch_size) / (
-            elapsed_time_per_iteration * 10**12 * args.world_size)
+             elapsed_time_per_iteration * 10**12 * args.world_size
+        )
+
+        tokens_per_step = args.seq_length * args.global_batch_size
+        tokens_per_s_per_gpu = tokens_per_step / (elapsed_time_per_iteration * args.world_size)
 
         one_logger_utils.track_e2e_metrics(args.log_throughput, throughput)
 
@@ -1174,8 +1178,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
                 writer.add_scalar('iteration-time',
                                   elapsed_time_per_iteration, iteration)
             if wandb_writer:
-                wandb_writer.log({'iteration-time': elapsed_time_per_iteration},
-                                 iteration)
+                wandb_writer.log({'iteration-time': float(elapsed_time_per_iteration)}, step=int(iteration))
         log_string = f" [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
         log_string += ' iteration {:8d}/{:8d} |'.format(
             iteration, args.train_iters)
@@ -1192,7 +1195,14 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
                 if writer:
                     writer.add_scalar('throughput', throughput, iteration)
                 if wandb_writer:
-                    wandb_writer.log({'throughput': throughput}, iteration)
+                    wandb_writer.log({'tflops-per-sec-per-gpu': float(throughput)}, step=int(iteration))
+
+            log_string += f' throughput per GPU (Tokens/s/GPU): {tokens_per_s_per_gpu:.1f} |'
+            if args.log_timers_to_tensorboard:
+                if writer:
+                    writer.add_scalar('throughput per GPU (Tokens/s/GPU)', tokens_per_s_per_gpu, iteration)
+                if wandb_writer:
+                    wandb_writer.log({'tokens-per-sec-per-gpu': float(tokens_per_s_per_gpu)}, step=int(iteration))
         # Decoupled_learning_rate should be not None only on first and last pipeline stage.
         log_string += f' learning rate: {learning_rate:.6E} |'
         if args.decoupled_lr is not None and (mpu.is_pipeline_first_stage(ignore_virtual=True) or

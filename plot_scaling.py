@@ -27,23 +27,34 @@ GPUS_PER_NODE = 4
 PEAK_GPU_TFLOPS = 989.0
 
 # Map number of GPUs to the corresponding SLURM log file path.
+# EXPERIMENTS = {
+#     4: "output/dllm_n1_tp4_pp1_gbs16_mbs1_fsdp0/slurm-389149.log",
+#     8: "output/dllm_n2_tp4_pp1_gbs32_mbs1_fsdp0/slurm-389150.log",
+#     16: "output/dllm_n4_tp4_pp1_gbs64_mbs1_fsdp0/slurm-389151.log",
+#     32: "output/dllm_n8_tp4_pp1_gbs128_mbs1_fsdp0/slurm-389152.log",
+#     64: "output/dllm_n16_tp4_pp1_gbs256_mbs1_fsdp0/slurm-389183.log",
+#     128: "output/dllm_n32_tp4_pp1_gbs512_mbs1_fsdp0/slurm-389153.log",
+#     256: "output/dllm_n64_tp4_pp1_gbs1024_mbs1_fsdp0/slurm-389154.log",
+#     512: "output/dllm_n128_tp4_pp1_gbs2048_mbs1_fsdp0/slurm-389155.log",
+#     1024: "output/dllm_n256_tp4_pp1_gbs4096_mbs1_fsdp0/slurm-389174.log"
+# }
 EXPERIMENTS = {
-    4: "output/dllm_n1_tp4_pp1_gbs16_mbs1_fsdp0/slurm-389149.log",
-    8: "output/dllm_n2_tp4_pp1_gbs32_mbs1_fsdp0/slurm-389150.log",
-    16: "output/dllm_n4_tp4_pp1_gbs64_mbs1_fsdp0/slurm-389151.log",
-    32: "output/dllm_n8_tp4_pp1_gbs128_mbs1_fsdp0/slurm-389152.log",
-    64: "output/dllm_n16_tp4_pp1_gbs256_mbs1_fsdp0/slurm-389183.log",
-    128: "output/dllm_n32_tp4_pp1_gbs512_mbs1_fsdp0/slurm-389153.log",
-    256: "output/dllm_n64_tp4_pp1_gbs1024_mbs1_fsdp0/slurm-389154.log",
-    512: "output/dllm_n128_tp4_pp1_gbs2048_mbs1_fsdp0/slurm-389155.log",
-    1024: "output/dllm_n256_tp4_pp1_gbs4096_mbs1_fsdp0/slurm-389174.log"
+    4: "output/dllm-8B_n1_tp4_pp1_gbs64_mbs4_fsdp0/slurm-391995.log",
+    8: "output/dllm-8B_n2_tp4_pp1_gbs128_mbs4_fsdp0/slurm-391996.log",
+    16: "output/dllm-8B_n4_tp4_pp1_gbs256_mbs4_fsdp0/slurm-391997.log",
+    32: "output/dllm-8B_n8_tp4_pp1_gbs512_mbs4_fsdp0/slurm-391998.log",
+    64: "output/dllm-8B_n16_tp4_pp1_gbs1024_mbs4_fsdp0/slurm-391999.log",
+    128: "output/dllm-8B_n32_tp4_pp1_gbs2048_mbs4_fsdp0/slurm-392000.log",
+    256: "output/dllm-8B_n64_tp4_pp1_gbs4096_mbs4_fsdp0/slurm-392001.log",
+    512: "output/dllm-8B_n128_tp4_pp1_gbs8192_mbs4_fsdp0/slurm-392002.log",
+    1024: "output/dllm-8B_n256_tp4_pp1_gbs16384_mbs4_fsdp0/slurm-392003.log"
 }
 
 # Output filename for the combined figure (None = show interactively).
-OUTPUT_FILE = "dllm_jupiter_scaling.png"
+OUTPUT_FILE = "megadlm-8b-jupiter_scaling.png"
 
 # Title for the top (token throughput) bar chart.
-PLOT_TITLE = "Token Throughput DiffLM 8B Jupiter (TP 4, PP 1, GAS 16, MBS 1)"
+PLOT_TITLE = "Token Throughput DiffLM 8B Jupiter (TP 4, PP 1, GAS 16, MBS 4)"
 
 _WORLD_SIZE_RE = re.compile(r"using world size:\s*(\d+)")
 

@@ -56,10 +56,12 @@ Upgrading from NGC `24.11` to `26.03` (TransformerEngine 2.13.0) breaks `apply_r
 ValueError: apply_rope_fusion is not available. Please install TE >= 1.4 or Apex.
 ```
 
+
 **Workaround:**
 Add `--no-rope-fusion` to the job script's `GPT_MODEL_ARGS`.
 
 **Proper fix:**
+Add `export UB_SKIPMC=1`  # GH200+TE: skip CUDA Multicast, use IPC-based comm+GEMM overlap
 Update the import in `transformer_engine.py` to fall back to the new TE 2.x location:
 ```python
 try:
@@ -68,3 +70,14 @@ except ImportError:
     from transformer_engine.pytorch.rope import FusedRoPEFunc
 ```
 (The exact new module path needs verification inside the 26.03 container.)
+
+
+### `--tp-comm-overlap` incompatible with difflm-noshift
+
+**Problem:**
+```bash
+[rank20]: RuntimeError: /workspace/TransformerEngine/transformer_engine/pytorch/csrc/extensions/comm_gemm_overlap.cpp:263 in function copy_into_buffer: Assertion failed: _ubufs[_tp_id].numel() == input_size. Tried to copy an invalid tensor into a local chunk of a Userbuffers buffer (input_size=16777216, local_ubuf_size=16781312)
+```
+`local_ubuf_size = 16781312 = 4097 × 4096` TE allocates the userbuffer based on `--seq-length` 4097
+`input_size = 16777216 = 4096 × 4096`, the actual tensor is 4096 because difflm-noshift trims the first token
+`--tp-comm-overlap` is incompatible with difflm-noshift's seq trim as long as `--seq-length` is 4097 but the actual compute seq is 4096. You'd need to align these: either pass `--seq-length` 4096 and load 4097-token samples at the data level (so after trimming you get 4096), or live without the comm overlap for now.
