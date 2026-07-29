@@ -1186,7 +1186,12 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
                 if writer:
                     writer.add_scalar('throughput', throughput, iteration)
                 if wandb_writer:
-                    wandb_writer.log({'throughput': throughput}, iteration)
+                    tokens_per_sec_per_gpu = (
+                        batch_size * args.seq_length /
+                        elapsed_time_per_iteration / args.world_size
+                    )
+                    wandb_writer.log({'throughput (TFLOP/s/GPU)': throughput}, iteration)
+                    wandb_writer.log({'tokens/s/GPU': tokens_per_sec_per_gpu}, iteration)
         # Decoupled_learning_rate should be not None only on first and last pipeline stage.
         log_string += f' learning rate: {learning_rate:.6E} |'
         if args.decoupled_lr is not None and (mpu.is_pipeline_first_stage(ignore_virtual=True) or
